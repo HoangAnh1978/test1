@@ -390,7 +390,7 @@ export default function UsersPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Danh sach nguoi dung
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
+        <p className="text-gray-600 dark:text-gray-400 mt-1 hidden">
           Quan ly thong tin nguoi dung trong he thong
         </p>
       </div>
@@ -558,11 +558,11 @@ export default function UsersPage() {
           <div className="min-w-max flex font-bold">
             {/* Frozen columns footer */}
             <div className="flex flex-shrink-0 sticky left-0 z-10 bg-green-100 dark:bg-green-900/40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-              <div className="w-16 px-4 py-3 border-r border-green-300 dark:border-green-700"></div>
-              <div className="w-48 px-4 py-3 border-r border-green-300 dark:border-green-700"></div>
+              <div className="w-16 px-4 py-3"></div>
+              <div className="w-48 px-4 py-3"></div>
             </div>
             {/* Scrollable columns footer */}
-            <div className="flex flex-1 min-w-0">
+            <div className="flex flex-1 min-w-0 bg-green-100 dark:bg-green-900/40">
               <div className="w-16 px-4 py-3"></div>
               <div className="w-28 px-4 py-3"></div>
               <div className="w-64 px-4 py-3 text-right text-sm text-gray-700 dark:text-gray-300">
