@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { mockComments, mockUsers, getTicketById } from '../../../../../lib/mockData';
-import { CreateCommentRequest, Comment } from '../../../../../types/ticket';
+import { mockComments, mockUsers, getTicketById, addComment } from '../../../../../lib/mockData';
+import { CreateCommentRequest, Comment, Attachment } from '../../../../../types/ticket';
 
 export async function GET(
   request: Request,
@@ -45,35 +45,33 @@ export async function POST(
       );
     }
     
-    const body: CreateCommentRequest = await request.json();
+    const body = await request.json();
+    const attachments: Attachment[] = body.attachments || [];
+    const content = body.content || '';
     
-    if (!body.content || !body.authorId) {
+    // Cho phep gui comment chi voi attachments (khong can content)
+    if (!content.trim() && attachments.length === 0) {
       return NextResponse.json(
-        { error: 'Content and author ID are required' },
+        { error: 'Content or attachments are required' },
         { status: 400 }
       );
     }
     
-    const author = mockUsers.find(user => user.id === body.authorId);
-    if (!author) {
+    if (!body.authorId) {
       return NextResponse.json(
-        { error: 'Author not found' },
-        { status: 404 }
+        { error: 'Author ID is required' },
+        { status: 400 }
       );
     }
     
-    const newComment: Comment = {
-      id: (mockComments.length + 1).toString(),
-      content: body.content,
-      author,
-      createdAt: new Date().toISOString(),
-      ticketId: id
-    };
+    const newComment = addComment(id, content, body.authorId, attachments);
     
-    // In a real app, this would save to a database
-    mockComments.push(newComment);
-    ticket.comments.push(newComment);
-    ticket.updatedAt = new Date().toISOString();
+    if (!newComment) {
+      return NextResponse.json(
+        { error: 'Failed to create comment' },
+        { status: 400 }
+      );
+    }
     
     return NextResponse.json(newComment, { status: 201 });
   } catch (error) {

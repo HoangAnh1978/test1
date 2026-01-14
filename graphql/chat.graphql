@@ -1,0 +1,212 @@
+# Chat Room Queries
+query GetChatRooms {
+  chat_rooms(order_by: {updated_at: desc}) {
+    id
+    name
+    description
+    created_at
+    updated_at
+    created_by
+    room_type
+    is_private
+    participant_count
+    participants {
+      user_id
+      joined_at
+      role
+      user {
+        id
+        name
+        email
+        avatar
+      }
+    }
+    last_message {
+      id
+      content
+      created_at
+      user {
+        id
+        name
+        avatar
+      }
+    }
+  }
+}
+
+query GetChatRoom($roomId: uuid!) {
+  chat_rooms_by_pk(id: $roomId) {
+    id
+    name
+    description
+    created_at
+    updated_at
+    created_by
+    room_type
+    is_private
+    participants {
+      user_id
+      joined_at
+      role
+      user {
+        id
+        name
+        email
+        avatar
+      }
+    }
+    messages(order_by: {created_at: asc}) {
+      id
+      content
+      message_type
+      created_at
+      updated_at
+      edited_at
+      user {
+        id
+        name
+        email
+        avatar
+      }
+      reply_to {
+        id
+        content
+        user {
+          id
+          name
+          avatar
+        }
+      }
+    }
+  }
+}
+
+# Chat Messages
+query GetChatMessages($roomId: uuid!, $limit: Int = 50, $offset: Int = 0) {
+  chat_messages(
+    where: {room_id: {_eq: $roomId}}
+    order_by: {created_at: desc}
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    content
+    message_type
+    created_at
+    updated_at
+    edited_at
+    user {
+      id
+      name
+      email
+      avatar
+    }
+    reply_to {
+      id
+      content
+      user {
+        id
+        name
+        avatar
+      }
+    }
+  }
+}
+
+# Mutations
+mutation CreateChatRoom($input: chat_rooms_insert_input!) {
+  insert_chat_rooms_one(object: $input) {
+    id
+    name
+    description
+    room_type
+    is_private
+    created_at
+  }
+}
+
+mutation SendChatMessage($input: chat_messages_insert_input!) {
+  insert_chat_messages_one(object: $input) {
+    id
+    content
+    message_type
+    created_at
+    user {
+      id
+      name
+      avatar
+    }
+  }
+}
+
+mutation UpdateChatMessage($messageId: uuid!, $content: String!, $editedAt: timestamptz!) {
+  update_chat_messages_by_pk(
+    pk_columns: {id: $messageId}
+    _set: {content: $content, edited_at: $editedAt}
+  ) {
+    id
+    content
+    edited_at
+  }
+}
+
+mutation DeleteChatMessage($messageId: uuid!) {
+  delete_chat_messages_by_pk(id: $messageId) {
+    id
+  }
+}
+
+mutation JoinChatRoom($input: chat_room_participants_insert_input!) {
+  insert_chat_room_participants_one(object: $input) {
+    room_id
+    user_id
+    joined_at
+    role
+  }
+}
+
+mutation LeaveChatRoom($roomId: uuid!, $userId: uuid!) {
+  delete_chat_room_participants(
+    where: {room_id: {_eq: $roomId}, user_id: {_eq: $userId}}
+  ) {
+    affected_rows
+  }
+}
+
+# Subscriptions
+subscription SubscribeToChatMessages($roomId: uuid!) {
+  chat_messages(
+    where: {room_id: {_eq: $roomId}}
+    order_by: {created_at: desc}
+    limit: 1
+  ) {
+    id
+    content
+    message_type
+    created_at
+    user {
+      id
+      name
+      avatar
+    }
+    reply_to {
+      id
+      content
+      user {
+        id
+        name
+        avatar
+      }
+    }
+  }
+}
+
+subscription SubscribeToRoomUpdates($roomId: uuid!) {
+  chat_rooms_by_pk(id: $roomId) {
+    id
+    name
+    description
+    updated_at
+    participant_count
+  }
+}

@@ -1,0 +1,59 @@
+# User Queries
+query GetUsers {
+  users(order_by: {name: asc}) {
+    id
+    name
+    email
+    avatar
+    created_at
+    last_seen
+    is_online
+  }
+}
+
+query GetUser($userId: uuid!) {
+  users_by_pk(id: $userId) {
+    id
+    name
+    email
+    avatar
+    created_at
+    last_seen
+    is_online
+  }
+}
+
+# User Mutations
+mutation CreateUser($input: users_insert_input!) {
+  insert_users_one(object: $input) {
+    id
+    name
+    email
+    avatar
+    created_at
+  }
+}
+
+mutation UpdateUser($userId: uuid!, $input: users_set_input!) {
+  update_users_by_pk(
+    pk_columns: {id: $userId}
+    _set: $input
+  ) {
+    id
+    name
+    email
+    avatar
+    last_seen
+  }
+}
+
+mutation UpdateUserOnlineStatus($userId: uuid!, $isOnline: Boolean!, $lastSeen: timestamptz!) {
+  update_users_by_pk(
+    pk_columns: {id: $userId}
+    _set: {is_online: $isOnline, last_seen: $lastSeen}
+  ) {
+    id
+    is_online
+    last_seen
+  }
+}
