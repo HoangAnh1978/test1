@@ -25,6 +25,14 @@ export interface Comment {
   attachments: Attachment[];
 }
 
+export type RouteAttribute = 'giao' | 'nhan' | 'giao-nhan' | 've-bai' | 'khong-chon';
+
+export interface RouteAddress {
+  id: string;
+  address: string;
+  attribute: RouteAttribute;
+}
+
 export interface TicketDetails {
   content: string;
   executor?: User;
@@ -34,6 +42,7 @@ export interface TicketDetails {
   cost: number;
   additionalCost: number;
   notes?: string;
+  route?: RouteAddress[];
 }
 
 export interface Activity {

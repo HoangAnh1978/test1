@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Ticket, User } from "../types/ticket";
+import { Ticket, User, RouteAddress } from "../types/ticket";
+import RouteEditModal, { getRouteSummary } from "./RouteEditModal";
 
 const statusColors: Record<string, string> = {
   open: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
@@ -105,6 +106,9 @@ export default function TicketList() {
   const [showAddRow, setShowAddRow] = useState(false);
   const [newTicket, setNewTicket] = useState<NewTicketForm>(defaultNewTicket);
   const [creating, setCreating] = useState(false);
+
+  // Route editing states
+  const [routeModalTicketId, setRouteModalTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTickets();
@@ -395,6 +399,19 @@ export default function TicketList() {
     }
   };
 
+  const handleRouteSave = async (ticketId: string, route: RouteAddress[]) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (ticket) {
+      await updateTicket(ticketId, {
+        details: {
+          ...ticket.details,
+          route: route,
+        }
+      });
+    }
+    setRouteModalTicketId(null);
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -604,6 +621,7 @@ export default function TicketList() {
                 <th>Do uu tien</th>
                 <th>Nguoi thuc hien</th>
                 <th>Khach hang</th>
+                <th>Tuyen duong</th>
                 <th>Ngay tao</th>
               </tr>
             </thead>
@@ -617,6 +635,7 @@ export default function TicketList() {
                   <td><span class="badge priority-${ticket.priority}">${ticket.priority}</span></td>
                   <td>${ticket.assignee?.name || "-"}</td>
                   <td>${ticket.details?.customer || "-"}</td>
+                  <td>${ticket.details?.route?.map(r => r.address).join(", ") || "-"}</td>
                   <td>${fmtDate(ticket.createdAt)}</td>
                 </tr>
               `).join("")}
@@ -886,6 +905,9 @@ export default function TicketList() {
                   <div className="w-36 px-3 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">
                     Khach hang
                   </div>
+                  <div className="w-52 px-3 py-3 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">
+                    Tuyen duong
+                  </div>
                   <div className="w-28 px-3 py-3">
                     <button onClick={() => handleSort("createdAt")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
                       Ngay tao <SortIcon field="createdAt" />
@@ -902,7 +924,7 @@ export default function TicketList() {
             {paginatedTickets.length === 0 && !showAddRow ? (
               <div className="text-center py-12">
                 <svg className="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 <p className="text-gray-500 dark:text-gray-400">
                   {searchQuery || dateFilterPreset !== "all" ? "Khong tim thay ticket phu hop." : "Chua co ticket nao."}
@@ -1050,6 +1072,68 @@ export default function TicketList() {
                           </button>
                         )}
                       </div>
+                      {/* Route Column */}
+                      <div className="w-52 px-3 py-2 relative">
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1 min-w-0">
+                            {ticket.details?.route && ticket.details.route.length > 0 ? (
+                              <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                                {ticket.details.route.slice(0, 2).map((r, i) => (
+                                  <span key={r.id || i} className="mr-1">
+                                    {r.address.length > 12 ? r.address.substring(0, 12) + '...' : r.address}
+                                    {i < Math.min(ticket.details.route!.length, 2) - 1 && ', '}
+                                  </span>
+                                ))}
+                                {ticket.details.route.length > 2 && <span className="text-gray-400">+{ticket.details.route.length - 2}</span>}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Chua co tuyen</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => { stopProp(e); setRouteModalTicketId(ticket.id); }}
+                            disabled={updating === ticket.id}
+                            className={`flex-shrink-0 p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors ${updating === ticket.id ? "opacity-50" : ""}`}
+                            title="Chi tiet tuyen duong"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="w-28 px-3 py-2">
+                        <span className="text-sm text-gray-500">{fmtDate(ticket.createdAt)}</span>
+                      </div>
+                      <div className="w-24 px-3 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={createTicket}
+                            disabled={creating}
+                            className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/40 rounded transition-colors disabled:opacity-50"
+                            title="Luu"
+                          >
+                            {creating ? (
+                              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            onClick={cancelAddRow}
+                            className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="Huy"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1138,6 +1222,9 @@ export default function TicketList() {
                           placeholder="Khach hang..."
                           className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
                         />
+                      </div>
+                      <div className="w-52 px-3 py-2">
+                        <span className="text-xs text-gray-400 italic">Them sau khi tao</span>
                       </div>
                       <div className="w-28 px-3 py-2">
                         <span className="text-sm text-gray-400">{fmtDate(new Date().toISOString())}</span>
@@ -1249,6 +1336,16 @@ export default function TicketList() {
           </div>
         </div>
       </div>
+
+      {/* Route Edit Modal */}
+      {routeModalTicketId && (
+        <RouteEditModal
+          isOpen={!!routeModalTicketId}
+          onClose={() => setRouteModalTicketId(null)}
+          route={tickets.find(t => t.id === routeModalTicketId)?.details?.route || []}
+          onSave={(route) => handleRouteSave(routeModalTicketId, route)}
+        />
+      )}
     </div>
   );
 }
