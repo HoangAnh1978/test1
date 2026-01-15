@@ -11,27 +11,51 @@ interface RouteEditModalProps {
 }
 
 const attributeOptions: { value: RouteAttribute; label: string }[] = [
+  { value: "rong", label: "Rong" },
   { value: "giao", label: "Giao" },
   { value: "nhan", label: "Nhan" },
   { value: "giao-nhan", label: "Giao/Nhan" },
   { value: "ve-bai", label: "Ve bai" },
-  { value: "khong-chon", label: "Khong chon" },
 ];
 
-const attributeColors: Record<RouteAttribute, string> = {
-  giao: "bg-green-100 border-green-300 dark:bg-green-900/30 dark:border-green-700",
-  nhan: "bg-blue-100 border-blue-300 dark:bg-blue-900/30 dark:border-blue-700",
-  "giao-nhan": "bg-purple-100 border-purple-300 dark:bg-purple-900/30 dark:border-purple-700",
-  "ve-bai": "bg-orange-100 border-orange-300 dark:bg-orange-900/30 dark:border-orange-700",
-  "khong-chon": "bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600",
+const attributeColors: Record<string, string> = {
+  rong: "bg-gray-100 border-l-gray-400 dark:bg-gray-800/40",
+  giao: "bg-emerald-100 border-l-emerald-500 dark:bg-emerald-900/40",
+  nhan: "bg-sky-100 border-l-sky-500 dark:bg-sky-900/40",
+  "giao-nhan": "bg-violet-100 border-l-violet-500 dark:bg-violet-900/40",
+  "ve-bai": "bg-amber-100 border-l-amber-500 dark:bg-amber-900/40",
 };
 
-const attributeBadgeColors: Record<RouteAttribute, string> = {
-  giao: "bg-green-500 text-white",
-  nhan: "bg-blue-500 text-white",
-  "giao-nhan": "bg-purple-500 text-white",
-  "ve-bai": "bg-orange-500 text-white",
-  "khong-chon": "bg-gray-500 text-white",
+const attributeBadgeColors: Record<string, string> = {
+  rong: "bg-gray-400 text-white",
+  giao: "bg-emerald-500 text-white",
+  nhan: "bg-sky-500 text-white",
+  "giao-nhan": "bg-violet-500 text-white",
+  "ve-bai": "bg-amber-500 text-white",
+};
+
+const attributeRingColors: Record<string, string> = {
+  rong: "ring-gray-400",
+  giao: "ring-emerald-500",
+  nhan: "ring-sky-500",
+  "giao-nhan": "ring-violet-500",
+  "ve-bai": "ring-amber-500",
+};
+
+const attributeTextColors: Record<string, string> = {
+  rong: "text-gray-600 dark:text-gray-400",
+  giao: "text-emerald-700 dark:text-emerald-300",
+  nhan: "text-sky-700 dark:text-sky-300",
+  "giao-nhan": "text-violet-700 dark:text-violet-300",
+  "ve-bai": "text-amber-700 dark:text-amber-300",
+};
+
+const attributeNumberColors: Record<string, string> = {
+  rong: "bg-gray-400",
+  giao: "bg-emerald-500",
+  nhan: "bg-sky-500",
+  "giao-nhan": "bg-violet-500",
+  "ve-bai": "bg-amber-500",
 };
 
 export const getAttributeLabel = (attr: RouteAttribute): string => {
@@ -42,12 +66,12 @@ export const getAttributeLabel = (attr: RouteAttribute): string => {
 export const getRouteSummary = (route: RouteAddress[]): string => {
   if (!route || route.length === 0) return "";
   return route
-    .map((r) => `${r.address} (${getAttributeLabel(r.attribute)})`)
+    .map((r) => r.address + " (" + getAttributeLabel(r.attribute) + ")")
     .join(", ");
 };
 
 export const getAttributeBadgeColor = (attr: RouteAttribute): string => {
-  return attributeBadgeColors[attr] || attributeBadgeColors["khong-chon"];
+  return attributeBadgeColors[attr] || attributeBadgeColors["giao"];
 };
 
 export default function RouteEditModal({
@@ -56,13 +80,22 @@ export default function RouteEditModal({
   route,
   onSave,
 }: RouteEditModalProps) {
+  const generateId = useCallback(() => {
+    return "route-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
+  }, []);
+
   const [addresses, setAddresses] = useState<RouteAddress[]>(() => 
     route?.length > 0 ? [...route] : []
   );
   const [hasInitialized, setHasInitialized] = useState(false);
 
   if (isOpen && !hasInitialized) {
-    const newAddresses = route?.length > 0 ? [...route] : [];
+    let newAddresses: RouteAddress[];
+    if (route?.length > 0) {
+      newAddresses = [...route];
+    } else {
+      newAddresses = [{ id: "route-" + Date.now() + "-init", address: "", attribute: "rong" }];
+    }
     if (JSON.stringify(newAddresses) !== JSON.stringify(addresses)) {
       setAddresses(newAddresses);
     }
@@ -73,27 +106,36 @@ export default function RouteEditModal({
     setHasInitialized(false);
   }
 
-  const generateId = useCallback(() => {
-    return `route-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }, []);
-
   const addAddress = () => {
     setAddresses([
       ...addresses,
-      { id: generateId(), address: "", attribute: "khong-chon" },
+      { id: generateId(), address: "", attribute: "rong" },
     ]);
   };
 
   const updateAddress = (
     id: string,
     field: "address" | "attribute",
-    value: string
+    value: string,
+    isLastItem: boolean = false
   ) => {
-    setAddresses(
-      addresses.map((addr) =>
+    setAddresses((prev) => {
+      const updated = prev.map((addr) =>
         addr.id === id ? { ...addr, [field]: value } : addr
-      )
-    );
+      );
+      
+      if (field === "address" && isLastItem && value.trim() !== "") {
+        const lastAddr = updated[updated.length - 1];
+        if (lastAddr && lastAddr.id === id) {
+          return [
+            ...updated,
+            { id: generateId(), address: "", attribute: "rong" as RouteAttribute },
+          ];
+        }
+      }
+      
+      return updated;
+    });
   };
 
   const deleteAddress = (id: string) => {
@@ -126,104 +168,66 @@ export default function RouteEditModal({
 
       <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Chi tiet Tuyen duong
-          </h2>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Chi tiet Tuyen duong
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {addresses.length === 0 ? (
-            <div className="text-center py-8">
-              <svg
-                className="w-12 h-12 mx-auto text-gray-300 mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                Chua co dia chi nao trong tuyen duong
-              </p>
-              <button
-                onClick={addAddress}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                Them dia chi dau tien
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {addresses.map((addr, index) => (
+          <div className="space-y-3">
+            {addresses.map((addr, index) => {
+              const isLastItem = index === addresses.length - 1;
+              const bgColor = attributeColors[addr.attribute] || attributeColors["giao"];
+              const numColor = attributeNumberColors[addr.attribute] || attributeNumberColors["giao"];
+              
+              return (
                 <div
                   key={addr.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-colors ${
-                    attributeColors[addr.attribute]
-                  }`}
+                  className={"flex items-start gap-3 p-4 rounded-xl border-l-4 transition-all shadow-sm hover:shadow-md " + bgColor}
                 >
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-500 text-white text-xs font-medium flex items-center justify-center">
+                  <div className={"flex-shrink-0 w-8 h-8 rounded-full text-white text-sm font-bold flex items-center justify-center shadow-md " + numColor}>
                     {index + 1}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 space-y-3">
                     <input
                       type="text"
                       value={addr.address}
-                      onChange={(e) =>
-                        updateAddress(addr.id, "address", e.target.value)
-                      }
-                      placeholder="Nhap dia chi..."
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      onChange={(e) => updateAddress(addr.id, "address", e.target.value, isLastItem)}
+                      placeholder={isLastItem && addr.address === "" ? "Nhap dia chi de them moi..." : "Nhap dia chi..."}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white bg-white"
+                      autoFocus={index === 0 && !addr.address}
                     />
-                  </div>
-
-                  <div className="flex-shrink-0 w-36">
-                    <select
-                      value={addr.attribute}
-                      onChange={(e) =>
-                        updateAddress(
-                          addr.id,
-                          "attribute",
-                          e.target.value as RouteAttribute
-                        )
-                      }
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      {attributeOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {attributeOptions.map((opt) => {
+                          const isSelected = addr.attribute === opt.value;
+                          const selectedClass = attributeBadgeColors[opt.value] + " " + attributeRingColors[opt.value] + " px-3 py-1.5 text-xs font-semibold rounded-full transition-all shadow-lg ring-2 ring-offset-2";
+                          const normalClass = "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-2 border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 px-3 py-1.5 text-xs font-medium rounded-full transition-all hover:shadow";
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => updateAddress(addr.id, "attribute", opt.value)}
+                              className={isSelected ? selectedClass : normalClass}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   <button
@@ -231,46 +235,33 @@ export default function RouteEditModal({
                     className="flex-shrink-0 p-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Xoa dia chi"
                   >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+
+            {/* Nut them dia chi moi */}
+            <button
+              onClick={addAddress}
+              className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="font-medium">
+                {addresses.length === 0 ? "Them dia chi dau tien" : "Them dia chi moi"}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl">
-          <button
-            onClick={addAddress}
-            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Them dia chi
-          </button>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {addresses.filter(a => a.address.trim()).length} dia chi
+          </div>
 
           <div className="flex items-center gap-3">
             <button
@@ -281,7 +272,7 @@ export default function RouteEditModal({
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg"
             >
               Luu thay doi
             </button>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Ticket, User, RouteAddress } from "../types/ticket";
 import RouteEditModal, { getRouteSummary } from "./RouteEditModal";
 
@@ -25,6 +26,14 @@ const typeColors: Record<string, string> = {
   feature: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
   task: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
   improvement: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+};
+
+const routeAttributeColors: Record<string, string> = {
+  rong: "text-gray-500 dark:text-gray-400",
+  giao: "text-emerald-600 dark:text-emerald-400",
+  nhan: "text-sky-600 dark:text-sky-400",
+  "giao-nhan": "text-violet-600 dark:text-violet-400",
+  "ve-bai": "text-amber-600 dark:text-amber-400",
 };
 
 const statusOptions: Ticket["status"][] = ["open", "in-progress", "resolved", "closed"];
@@ -77,6 +86,9 @@ const getStartOfMonth = () => {
 };
 
 export default function TicketList() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,20 +99,22 @@ export default function TicketList() {
   const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [customerValue, setCustomerValue] = useState<string>("");
   const [updating, setUpdating] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  
+  // Initialize states from URL search params
+  const [searchQuery, setSearchQuery] = useState<string>(searchParams.get("search") || "");
+  const [sortField, setSortField] = useState<SortField>((searchParams.get("sortField") as SortField) || "createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>((searchParams.get("sortDir") as SortDirection) || "desc");
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   
-  // Date filter states
-  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>("today");
-  const [dateFrom, setDateFrom] = useState<string>(getToday());
-  const [dateTo, setDateTo] = useState<string>(getToday());
+  // Date filter states - Initialize from URL
+  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>((searchParams.get("datePreset") as DateFilterPreset) || "today");
+  const [dateFrom, setDateFrom] = useState<string>(searchParams.get("dateFrom") || getToday());
+  const [dateTo, setDateTo] = useState<string>(searchParams.get("dateTo") || getToday());
   const [showDateFilter, setShowDateFilter] = useState(false);
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // Pagination states - Initialize from URL
+  const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get("page") || "1"));
+  const [pageSize, setPageSize] = useState(parseInt(searchParams.get("pageSize") || "20"));
 
   // Add new row states
   const [showAddRow, setShowAddRow] = useState(false);
@@ -109,13 +123,41 @@ export default function TicketList() {
 
   // Route editing states
   const [routeModalTicketId, setRouteModalTicketId] = useState<string | null>(null);
+  const [editingRoute, setEditingRoute] = useState<string | null>(null);
+  const [routeValue, setRouteValue] = useState<string>("");
+
+  // Update URL when filters change
+  const updateURL = useCallback(() => {
+    const params = new URLSearchParams();
+    
+    if (searchQuery) params.set("search", searchQuery);
+    if (dateFilterPreset !== "today") params.set("datePreset", dateFilterPreset);
+    if (dateFilterPreset === "custom") {
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+    }
+    if (sortField !== "createdAt") params.set("sortField", sortField);
+    if (sortDirection !== "desc") params.set("sortDir", sortDirection);
+    if (currentPage !== 1) params.set("page", currentPage.toString());
+    if (pageSize !== 20) params.set("pageSize", pageSize.toString());
+    
+    const queryString = params.toString();
+    const newURL = queryString ? `?${queryString}` : window.location.pathname;
+    
+    router.replace(newURL, { scroll: false });
+  }, [searchQuery, dateFilterPreset, dateFrom, dateTo, sortField, sortDirection, currentPage, pageSize, router]);
 
   useEffect(() => {
     fetchTickets();
     fetchUsers();
   }, []);
 
-  // Reset to page 1 when filters change
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL();
+  }, [searchQuery, dateFilterPreset, dateFrom, dateTo, sortField, sortDirection, currentPage, pageSize, updateURL]);
+
+  // Reset to page 1 when filters change (except page/pageSize changes)
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, dateFilterPreset, dateFrom, dateTo, sortField, sortDirection]);
@@ -412,6 +454,51 @@ export default function TicketList() {
     setRouteModalTicketId(null);
   };
 
+  const handleRouteEdit = (ticket: Ticket) => {
+    setEditingRoute(ticket.id);
+    const routeText = ticket.details?.route?.map(r => r.address).join(", ") || "";
+    setRouteValue(routeText);
+    setEditingStatus(null);
+    setEditingPriority(null);
+    setEditingAssignee(null);
+    setEditingCustomer(null);
+  };
+
+  const handleRouteInlineSave = async (ticketId: string) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (ticket) {
+      const addresses = routeValue
+        .split(",")
+        .map(addr => addr.trim())
+        .filter(addr => addr.length > 0);
+      
+      const newRoute: RouteAddress[] = addresses.map((address, index) => ({
+        id: "route-" + Date.now() + "-" + index,
+        address: address,
+        attribute: "giao" as const,
+      }));
+
+      await updateTicket(ticketId, {
+        details: {
+          ...ticket.details,
+          route: newRoute,
+        }
+      });
+    }
+    setEditingRoute(null);
+    setRouteValue("");
+  };
+
+  const handleRouteKeyDown = (e: React.KeyboardEvent, ticketId: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleRouteInlineSave(ticketId);
+    } else if (e.key === "Escape") {
+      setEditingRoute(null);
+      setRouteValue("");
+    }
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -661,7 +748,7 @@ export default function TicketList() {
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return (
-        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
         </svg>
       );
@@ -870,35 +957,35 @@ export default function TicketList() {
                     />
                   </div>
                   <div className="w-16 px-3 py-3 border-r border-gray-300 dark:border-gray-600">
-                    <button onClick={() => handleSort("id")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("id")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       ID <SortIcon field="id" />
                     </button>
                   </div>
                   <div className="w-64 px-3 py-3 border-r border-gray-300 dark:border-gray-600">
-                    <button onClick={() => handleSort("title")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("title")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Tieu de <SortIcon field="title" />
                     </button>
                   </div>
                 </div>
                 {/* Scrollable Columns Header */}
-                <div className="flex flex-1">
+                <div className="flex flex-1 bg-gray-100 dark:bg-gray-700">
                   <div className="w-24 px-3 py-3">
-                    <button onClick={() => handleSort("type")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("type")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Loai <SortIcon field="type" />
                     </button>
                   </div>
                   <div className="w-28 px-3 py-3">
-                    <button onClick={() => handleSort("status")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("status")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Trang thai <SortIcon field="status" />
                     </button>
                   </div>
                   <div className="w-28 px-3 py-3">
-                    <button onClick={() => handleSort("priority")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("priority")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Uu tien <SortIcon field="priority" />
                     </button>
                   </div>
                   <div className="w-40 px-3 py-3">
-                    <button onClick={() => handleSort("assignee")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("assignee")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Nguoi thuc hien <SortIcon field="assignee" />
                     </button>
                   </div>
@@ -909,7 +996,7 @@ export default function TicketList() {
                     Tuyen duong
                   </div>
                   <div className="w-28 px-3 py-3">
-                    <button onClick={() => handleSort("createdAt")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900">
+                    <button onClick={() => handleSort("createdAt")} className="flex items-center gap-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase hover:text-gray-900 dark:hover:text-white">
                       Ngay tao <SortIcon field="createdAt" />
                     </button>
                   </div>
@@ -1074,64 +1161,77 @@ export default function TicketList() {
                       </div>
                       {/* Route Column */}
                       <div className="w-52 px-3 py-2 relative">
-                        <div className="flex items-center gap-1">
-                          <div className="flex-1 min-w-0">
-                            {ticket.details?.route && ticket.details.route.length > 0 ? (
-                              <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
-                                {ticket.details.route.slice(0, 2).map((r, i) => (
-                                  <span key={r.id || i} className="mr-1">
-                                    {r.address.length > 12 ? r.address.substring(0, 12) + '...' : r.address}
-                                    {i < Math.min(ticket.details.route!.length, 2) - 1 && ', '}
-                                  </span>
-                                ))}
-                                {ticket.details.route.length > 2 && <span className="text-gray-400">+{ticket.details.route.length - 2}</span>}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-400 italic">Chua co tuyen</span>
-                            )}
+                        {editingRoute === ticket.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={routeValue}
+                              onChange={(e) => setRouteValue(e.target.value)}
+                              onBlur={() => handleRouteInlineSave(ticket.id)}
+                              onKeyDown={(e) => handleRouteKeyDown(e, ticket.id)}
+                              className="flex-1 px-2 py-1 text-xs border-2 border-blue-500 rounded focus:outline-none dark:bg-gray-700 dark:text-white"
+                              autoFocus
+                              placeholder="Dia chi 1, Dia chi 2, ..."
+                            />
+                            <button
+                              onClick={(e) => { stopProp(e); setEditingRoute(null); setRouteModalTicketId(ticket.id); }}
+                              className="flex-shrink-0 p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                              title="Mo popup chi tiet"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                              </svg>
+                            </button>
                           </div>
-                          <button
-                            onClick={(e) => { stopProp(e); setRouteModalTicketId(ticket.id); }}
-                            disabled={updating === ticket.id}
-                            className={`flex-shrink-0 p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors ${updating === ticket.id ? "opacity-50" : ""}`}
-                            title="Chi tiet tuyen duong"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => { stopProp(e); handleRouteEdit(ticket); }}
+                              disabled={updating === ticket.id}
+                              className={`flex-1 text-left px-2 py-0.5 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 hover:ring-2 hover:ring-blue-400 transition-all truncate ${updating === ticket.id ? "opacity-50" : ""}`}
+                            >
+                              {ticket.details?.route && ticket.details.route.length > 0 ? (
+                                <span className="truncate block">
+                                  {ticket.details.route.slice(0, 2).map((r, i) => (
+                                    <span key={r.id || i} className={"mr-1 font-medium " + (routeAttributeColors[r.attribute] || "text-gray-600 dark:text-gray-300")}>
+                                      {r.address.length > 12 ? r.address.substring(0, 12) + '...' : r.address}
+                                      {i < Math.min(ticket.details.route!.length, 2) - 1 && <span className="text-gray-400">, </span>}
+                                    </span>
+                                  ))}
+                                  {ticket.details.route.length > 2 && <span className="text-gray-400">+{ticket.details.route.length - 2}</span>}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 italic">Click de nhap</span>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => { stopProp(e); setRouteModalTicketId(ticket.id); }}
+                              disabled={updating === ticket.id}
+                              className={`flex-shrink-0 p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors ${updating === ticket.id ? "opacity-50" : ""}`}
+                              title="Chi tiet tuyen duong"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
-                          </button>
-                        </div>
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="w-28 px-3 py-2">
                         <span className="text-sm text-gray-500">{fmtDate(ticket.createdAt)}</span>
                       </div>
                       <div className="w-24 px-3 py-2">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={createTicket}
-                            disabled={creating}
-                            className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/40 rounded transition-colors disabled:opacity-50"
-                            title="Luu"
-                          >
-                            {creating ? (
-                              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                          <button
-                            onClick={cancelAddRow}
-                            className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                            title="Huy"
+                          <Link
+                            href={`/tickets/${ticket.id}`}
+                            className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                            title="Xem chi tiet"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                          </button>
+                          </Link>
                         </div>
                       </div>
                     </div>

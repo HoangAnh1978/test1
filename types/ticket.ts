@@ -25,7 +25,7 @@ export interface Comment {
   attachments: Attachment[];
 }
 
-export type RouteAttribute = 'giao' | 'nhan' | 'giao-nhan' | 've-bai' | 'khong-chon';
+export type RouteAttribute = 'rong' | 'giao' | 'nhan' | 'giao-nhan' | 've-bai';
 
 export interface RouteAddress {
   id: string;
